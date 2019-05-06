@@ -57,15 +57,16 @@ check1 = create_variables(time_series, 10)
 #Neural Network    
 #Initially, single fully connected hidden layer is tried with selected activation function    
 #Since it's a regression problem we don't need any transformation in the output layer
-#Adam is selected as optimization method (others can be tried but number of runs would be much more higher in grid search below)
-#Dropout method is selected for regularization
+#Adam is selected as optimization method: 
+#Others can be tried after checking performance of Adam, otherwise number of runs would be much more higher in grid search below)
+#Dropout method is selected for regularization (due to the same reason)
     
 def simple_nn(num_nodes, k, activation_func, dropout_rate, init):
     #num_nodes: number of nodes in the hidden layer
     #k: number of variables/inputs (different values from 1 to 50)
     #activation_func: type of activation functions in the hidden layer (relu, sigmoid)
     #dropout_rate: drop out rate (warning: probability of turning off.)
-    #init: weight initialization (uniform, normal, lecun_uniform)
+    #init: weight initialization (uniform, normal)
     
     #Create model
     model = Sequential()
@@ -83,7 +84,7 @@ def simple_nn(num_nodes, k, activation_func, dropout_rate, init):
 #CV in grid search takes much more time and we would like to evaluate best h-parameters and k values on the same data points  
 #Since real test set will be provided later, we'll use this to choose the best model  
 #Remaining observations will be used in training of NNs if they are not including empty variables (previous obs)
-
+#I think this works best since the test set which will be provided later is presumed next 200 points of training
 val_times = time_series[50:].sample(n=200, random_state=1905).sort_values('time')     
 
 plt.plot(val_times.time, val_times.target)
@@ -103,7 +104,7 @@ def prepare_datasets(data1, k):
     #create Xs and Ys
     y_train = pd.DataFrame(train_data.target)
     X_train = pd.DataFrame(train_data.drop(['time','target'], axis=1))
-    #eliminate observations with null variables located at the first k rows (they won't be used in training since they have null values)       
+    #for training, eliminate observations with null variables located at the first k rows (they won't be used in training since they have null values)       
     X_train = X_train[k:].reset_index(drop=True) 
     y_train = y_train[k:].reset_index(drop=True)
 
@@ -120,7 +121,7 @@ def lets_go_grid(data1, epochs1, batch_size1):
     #initialize 
     output = pd.DataFrame(); 
     counter1 = 0
-    k_list = [1, 3, 5, 7, 10, 15, 20, 30, 45, 50]
+    k_list = [1, 5, 7, 10, 13, 15, 18, 20, 30, 50]
 
     for k1 in k_list:
         print('go for: '+str(k1))
@@ -129,18 +130,19 @@ def lets_go_grid(data1, epochs1, batch_size1):
         X_train, y_train, X_val, y_val = prepare_datasets(data1, k1)
     
         #define the grid search parameters and model 
-
-        grid = ParameterGrid({"num_nodes": [3, 5, 7, 10, 15, 20, 50],
+        #1260 sets
+        grid = ParameterGrid({"num_nodes": [3, 5, 7, 10, 15, 20, 25, 30],
                           "k": [k1],
-                          "activation_func":['relu', 'sigmoid'],
+                          "activation_func":['relu', 'tanh'], #sigmoid was worse in initial trials
                           "dropout_rate": [0, 0.1, 0.25],
-                          "init": ['uniform', 'normal', 'lecun_uniform']})
+                          "init": ['normal', 'uniform', 'lecun_uniform']})
+
 
 
         for params in grid:
             counter1 = counter1 + 1
-            print(params)
-            model = KerasRegressor(build_fn=simple_nn, epochs=epochs1, batch_size=batch_size1, verbose=1, **params)
+            #print(params)
+            model = KerasRegressor(build_fn=simple_nn, epochs=epochs1, batch_size=batch_size1, verbose=0, **params)
             model.fit(X_train, y_train)
             
             #prediction on validation
@@ -150,8 +152,8 @@ def lets_go_grid(data1, epochs1, batch_size1):
             comparison = pd.concat([y_val, predictions], axis = 1)
             comparison = comparison.rename(columns={0: 'predictions'}).reset_index(drop=False)
 
-            comparison.plot(x='index', y=['target', 'predictions'], label=['target', 'predictions'])
-            plt.show()
+            #comparison.plot(x='index', y=['target', 'predictions'], label=['target', 'predictions'])
+            #plt.show()
 
             mse = mean_squared_error(comparison.target,comparison.predictions)
             r_squared = r2_score(comparison.target,comparison.predictions)
@@ -174,18 +176,49 @@ def lets_go_grid(data1, epochs1, batch_size1):
     return output
 
 #%%
-#Run
+#Run (warning: it takes time)
 grid_results1 = lets_go_grid(time_series, 200, 50)   
 
 #to excel 
 writer = pd.ExcelWriter('grid_results.xlsx', engine='xlsxwriter');
 grid_results1.to_excel(writer, sheet_name= 'grid_results');
 writer.save(); 
-    
-            
 
+#%%
+#Grid search evaluation based on mse
+eval_results = pd.read_excel('grid_results.xlsx').reset_index(drop=True)
+
+best_of_ks = eval_results.groupby(['k'])['mse'].min().reset_index(drop=False).sort_values('k')
+
+plt.plot(best_of_ks.k, best_of_ks.mse)
+plt.show()   
+
+#top 10 h-parameters sets
+top10 = eval_results.sort_values('mse')
+top10.head(10)
+
+#1-hidden layer final model 
+
+
+
+#%%
+
+
+#%%
+#SECRET TEST SET DELETE THIS LATER
+secret_test = pd.read_excel('secret_test.xlsx').reset_index(drop=False) 
+secret_test = secret_test.rename(index=str, columns={"index": "time"})
     
-    
+plt.plot(secret_test.time, secret_test.target)
+plt.show()
+
+#%%
+#Test on recursively predictions 
+
+
+
+
+
     
 
 
