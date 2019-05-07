@@ -51,7 +51,7 @@ def create_variables(data1, k):
     return data2
 
 #%%
-#Neural Network    
+#Neural Network with 1-Hidden Layer ********************
 #Initially, single fully connected hidden layer is tried with selected activation function    
 #Since it's a regression problem we don't need any transformation in the output layer
 #Adam is selected as optimization method: 
@@ -61,7 +61,7 @@ def create_variables(data1, k):
 def simple_nn(num_nodes, k, activation_func, dropout_rate, init):
  
     #num_nodes: number of nodes in the hidden layer
-    #k: number of variables/inputs coming from previous values (from 1 to 50)
+    #k: number of variables/inputs coming from previous values
     #activation_func: type of activation functions in the hidden layer (relu, sigmoid)
     #dropout_rate: drop out rate (warning: this is probability of turning off)
     #init: weight initialization (uniform, normal)
@@ -77,13 +77,13 @@ def simple_nn(num_nodes, k, activation_func, dropout_rate, init):
     return model
 
 #%%
-#Different values for k will be tried to find the best window size (variables) from 1 to 50 
-#Therefore, 200 observations (~%20) after time=50 were selected randomly, in order to validate all models by the same set
+#Different values for k will be tried to find the best window size (variables) from 1 to 400 
+#Therefore, 200 observations (~%20) after time=500 were selected randomly, in order to validate all models by the same set
 #CV in grid search takes much more time and we would like to evaluate best h-parameters and k values on the same data points  
 #Since real test set will be provided later, we'll use this to choose the best h-parameters set
 #Remaining observations will be used in training of NNs if they are not including empty variables (previous obs)
 
-val_times = time_series[50:].sample(n=200, random_state=1905).sort_values('time')     
+val_times = time_series[500:].sample(n=200, random_state=1905).sort_values('time')     
 
 plt.plot(val_times.time, val_times.target)
 plt.show()    
@@ -121,7 +121,7 @@ def lets_go_grid(data1, epochs1, batch_size1):
     #initialize 
     output = pd.DataFrame(); 
     counter1 = 0
-    k_list = [1, 5, 10, 15, 20, 30, 50]
+    k_list = [1, 5, 10, 15, 20, 30, 50, 100, 200, 400]
     
     for k1 in k_list:
         print('go for: '+str(k1))
@@ -175,7 +175,7 @@ def lets_go_grid(data1, epochs1, batch_size1):
 
 #%%
 #Run grid search for 1-hidden layer NN (warning: it takes time, faster in Google colab)
-grid_results1 = lets_go_grid(time_series, 150, 50)   
+grid_results1 = lets_go_grid(time_series, 200, 50)   
 
 #to excel 
 writer = pd.ExcelWriter('grid_results.xlsx', engine='xlsxwriter');
@@ -282,7 +282,7 @@ last_predictions.to_excel(writer, sheet_name= 'last_predictions');
 writer.save();    
 
 #%%
-#2-Hidden layers 
+#Neural Network with 2-Hidden Layers ********************
 
 def simple_nn(num_nodes, k, activation_func, dropout_rate, init):
  
@@ -305,7 +305,7 @@ def simple_nn(num_nodes, k, activation_func, dropout_rate, init):
     return model  
 
 #%%
-##Runs with grid search and evaluation on the validation set
+##Runs with grid search and evaluation on the validation set (2-Hidden Layers)
 
 def lets_go_grid(data1, epochs1, batch_size1):
     
@@ -322,9 +322,9 @@ def lets_go_grid(data1, epochs1, batch_size1):
     
         #define the grid search parameters and model 
         #1260 sets
-        grid = ParameterGrid({"num_nodes": [8, 9, 10, 11],
+        grid = ParameterGrid({"num_nodes": [3, 5, 6, 8, 9, 20],
                           "k": [k1],
-                          "activation_func":['relu'], #sigmoid was worse in initial trials so ignored
+                          "activation_func":['relu'],
                           "dropout_rate": [0],
                           "init": ['normal', 'uniform']})
 
@@ -405,7 +405,7 @@ model = simple_nn(9, 20, 'relu', 0, 'normal')
 X_train, y_train, X_val, y_val = prepare_datasets(time_series, 20)
 
 #fit on train set
-model.fit(X_train, y_train, epochs=200, batch_size=50, verbose=1)
+model.fit(X_train, y_train, epochs=500, batch_size=50, verbose=1)
 
 #validation set results 
 predictions = model.predict(X_val)
@@ -419,11 +419,11 @@ plt.show()
 mse_2hl = mean_squared_error(comparison.target,comparison.predictions)
 r_squared_2hl = r2_score(comparison.target,comparison.predictions)
 
-#MSE on validation set of best model of 1 hidden layer ~ 162.85
-#R2 on validation set of best model of 1 hidden layer = 0.93
+#MSE on validation set of best model of 1 hidden layer ~ 50.01
+#R2 on validation set of best model of 1 hidden layer = 0.970
     
 #%%        
-
+#Let's predict the next 200 values
 vertical_data, horizontal_data = predict_next_x(time_series, 20, 200, model);        
         
 last_predictions2 = vertical_data.tail(200).reset_index(drop=True)        
@@ -445,7 +445,7 @@ plt.show()
 #%%
 #Test on recursively predictions 
 
-comparison_last = pd.concat([secret_test.target, last_predictions.predictions], axis = 1).reset_index(drop=False)
+comparison_last = pd.concat([secret_test.target, last_predictions2.predictions], axis = 1).reset_index(drop=False)
 comparison_last.plot(x='index', y=['target', 'predictions'], label=['target', 'predictions'])
 plt.show()
 
@@ -453,21 +453,8 @@ mse_2hl = mean_squared_error(comparison_last.target, comparison_last.predictions
 r_squared_2hl = r2_score(comparison_last.target, comparison_last.predictions)
 
 #%%
-#3 Hidden Layers 
-#Grid search evaluation of 3-hidden layers NN based on MSE
+#Neural Network with 3-Hidden Layers ********************
 
-eval_results = pd.read_excel('results_3hl.xlsx').reset_index(drop=True)
-
-best_of_ks = eval_results.groupby(['k'])['mse'].min().reset_index(drop=False).sort_values('k')
-
-plt.plot(best_of_ks.k, best_of_ks.mse)
-plt.show()   
-
-#top 10 h-parameters sets
-top10 = eval_results.sort_values('mse')
-top10.head(10)
-
-#%%
 def simple_nn(num_nodes, k, activation_func, dropout_rate, init):
  
     #num_nodes: number of nodes in the hidden layer
@@ -491,21 +478,107 @@ def simple_nn(num_nodes, k, activation_func, dropout_rate, init):
     return model
 
 #%%
+##Runs with grid search and evaluation on the validation set (3-Hidden Layers)
+
+def lets_go_grid(data1, epochs1, batch_size1):
+    
+    #initialize 
+    output = pd.DataFrame(); 
+    counter1 = 0
+    k_list = [20, 24, 50, 100, 200, 400]
+    
+    for k1 in k_list:
+        print('go for: '+str(k1))
+    
+        #create train/test
+        X_train, y_train, X_val, y_val = prepare_datasets(data1, k1)
+    
+        #define the grid search parameters and model 
+        #1260 sets
+        grid = ParameterGrid({"num_nodes": [3, 5, 6, 8, 9, 20],
+                          "k": [k1],
+                          "activation_func":['relu'],
+                          "dropout_rate": [0],
+                          "init": ['normal', 'uniform']})
+
+        for params in grid:
+            counter1 = counter1 + 1
+            print(params)
+            model = KerasRegressor(build_fn=simple_nn, epochs=epochs1, batch_size=batch_size1, verbose=0, **params)
+            model.fit(X_train, y_train)
+            
+            #prediction on validation
+            predictions = model.predict(X_val)
+            predictions = pd.DataFrame(predictions)
+            #evaluation
+            comparison = pd.concat([y_val, predictions], axis = 1)
+            comparison = comparison.rename(columns={0: 'predictions'}).reset_index(drop=False)
+
+            comparison.plot(x='index', y=['target', 'predictions'], label=['target', 'predictions'])
+            plt.show()
+
+            mse = mean_squared_error(comparison.target,comparison.predictions)
+            r_squared = r2_score(comparison.target,comparison.predictions)
+            
+            output1 = {'run': counter1, 
+                       'k': k1, 
+                       'num_nodes': params['num_nodes'],
+                       'activation_func': params['activation_func'],
+                       'dropout_rate': params['dropout_rate'],
+                       'init': params['init'],
+                       
+                       'mse' : mse, 
+                       'r2': r_squared 
+                        }
+            
+            output1 = pd.DataFrame(output1, index=[0])
+            
+            output = pd.concat([output, output1], axis=0)
+            
+    return output    
+
+#%%
+#Run grid search for 3-hidden layers NN (warning: it takes time, faster in Google colab)
+grid_results3 = lets_go_grid(time_series, 200, 50)   
+
+#to excel 
+writer = pd.ExcelWriter('results_3hl.xlsx', engine='xlsxwriter');
+grid_results3.to_excel(writer, sheet_name= 'grid_results');
+writer.save(); 
+
+#%%
+#Grid search evaluation of 3-hidden layers NN based on MSE
+
+eval_results = pd.read_excel('results_3hl.xlsx').reset_index(drop=True)
+
+best_of_ks = eval_results.groupby(['k'])['mse'].min().reset_index(drop=False).sort_values('k')
+
+plt.plot(best_of_ks.k, best_of_ks.mse)
+plt.show()   
+
+#top 10 h-parameters sets
+top10 = eval_results.sort_values('mse')
+top10.head(10)
+
+#%%
+del eval_results, best_of_ks, top10
+
+#%%
 #Best h-parameters for 3-hidden layers NN 
 
-#num_nodes: 9
+#num_nodes: 20
 #k: 20
 #activation_func: Relu
 #dropout_rate: 0
 #init: weight initialization; Normal
 
-model = simple_nn(9, 20, 'relu', 0, 'normal')
+model = simple_nn(20, 20, 'relu', 0, 'normal')
 
 #create train/validation
 X_train, y_train, X_val, y_val = prepare_datasets(time_series, 20)
 
 #fit on train set
-model.fit(X_train, y_train, epochs=200, batch_size=50, verbose=1)
+model.fit(X_train, y_train, epochs=500, batch_size=50, verbose=1)
 
 #validation set results 
 predictions = model.predict(X_val)
@@ -519,8 +592,8 @@ plt.show()
 mse_3hl = mean_squared_error(comparison.target,comparison.predictions)
 r_squared_3hl = r2_score(comparison.target,comparison.predictions)
 
-#MSE on validation set of best model of 1 hidden layer ~ 116.92
-#R2 on validation set of best model of 1 hidden layer = 0.95
+#MSE on validation set of best model of 1 hidden layer ~ 160.93
+#R2 on validation set of best model of 1 hidden layer = 0.90
     
 #%%        
 
@@ -535,6 +608,14 @@ last_predictions3.to_excel(writer, sheet_name= 'last_predictions');
 writer.save();    
 
 #%%
+#SECRET TEST SET DELETE THIS LATER
+secret_test = pd.read_excel('secret_test.xlsx').reset_index(drop=False) 
+secret_test = secret_test.rename(columns={"index": "time"})
+    
+plt.plot(secret_test.time, secret_test.target)
+plt.show()
+
+#%%
 #Test on recursively predictions 
 
 comparison_last = pd.concat([secret_test.target, last_predictions3.predictions], axis = 1).reset_index(drop=False)
@@ -543,6 +624,4 @@ plt.show()
 
 mse_3hl = mean_squared_error(comparison_last.target, comparison_last.predictions)
 r_squared_3hl = r2_score(comparison_last.target, comparison_last.predictions)
-    
-
 
